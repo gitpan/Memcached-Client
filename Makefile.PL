@@ -14,8 +14,7 @@ my %WriteMakefileArgs = (
   'BUILD_REQUIRES' => {
     'IO::Socket::INET' => '0',
     'POSIX' => '0',
-    'Test::More' => '0',
-    'Test::Most' => '0'
+    'Test::More' => '0'
   },
   'CONFIGURE_REQUIRES' => {
     'ExtUtils::MakeMaker' => '6.31'
@@ -39,7 +38,7 @@ my %WriteMakefileArgs = (
     'bytes' => '0',
     'constant' => '0'
   },
-  'VERSION' => '0.95',
+  'VERSION' => '0.96',
   'test' => {
     'TESTS' => 't/*.t'
   }
