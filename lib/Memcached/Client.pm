@@ -1,6 +1,6 @@
 package Memcached::Client;
 BEGIN {
-  $Memcached::Client::VERSION = '0.96';
+  $Memcached::Client::VERSION = '0.97';
 }
 # ABSTRACT: All-singing, all-dancing Perl client for Memcached
 
@@ -585,7 +585,7 @@ Memcached::Client - All-singing, all-dancing Perl client for Memcached
 
 =head1 VERSION
 
-version 0.96
+version 0.97
 
 =head1 SYNOPSIS
 
