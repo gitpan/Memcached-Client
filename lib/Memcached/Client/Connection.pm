@@ -1,6 +1,6 @@
 package Memcached::Client::Connection;
 BEGIN {
-  $Memcached::Client::Connection::VERSION = '0.97';
+  $Memcached::Client::Connection::VERSION = '0.98';
 }
 # ABSTRACT: Class to manage Memcached::Client server connections
 
@@ -102,7 +102,7 @@ Memcached::Client::Connection - Class to manage Memcached::Client server connect
 
 =head1 VERSION
 
-version 0.97
+version 0.98
 
 =head1 SYNOPSIS
 

@@ -1,6 +1,6 @@
 package Memcached::Client;
 BEGIN {
-  $Memcached::Client::VERSION = '0.97';
+  $Memcached::Client::VERSION = '0.98';
 }
 # ABSTRACT: All-singing, all-dancing Perl client for Memcached
 
@@ -33,6 +33,7 @@ sub new {
     $self->hash_namespace ($args{hash_namespace} || 1);
     $self->namespace ($args{namespace} || "");
     $self->set_servers ($args{servers});
+    $self->set_preprocessor ($args{preprocessor});
 
     $self;
 }
@@ -68,6 +69,20 @@ sub hash_namespace {
     my $ret = $self->{hash_namespace};
     $self->{hash_namespace} = !!$new if (defined $new);
     return $ret;
+}
+
+
+sub set_preprocessor {
+    my ($self, $new) = @_;
+    $self->{preprocessor} = $new if (ref $new eq "CODE");
+    return 1;
+}
+
+
+sub __preprocess {
+    my ($self, $key) = @_;
+    return $key unless $self->{preprocessor};
+    return $self->{preprocessor}->($key);
 }
 
 
@@ -222,9 +237,7 @@ sub DESTROY {
             $cmd_cv ||= AE::cv;
             $cmd_cv->cb (sub {$callback->($cmd_cv->recv || $default)}) if ($callback);
 
-            my ($key) = shift @args;
-
-            if (my $server = $self->__hash ($key)) {
+            if (my ($key, $server) = $self->__hash (shift @args)) {
                 # DEBUG "C [%s]: %s", $command, join " ", map {defined $_ ? "[$_]" : "[undef]"} $key, @args;
                 $self->$subname ($cmd_cv, wantarray, $self->{servers}->{$server}, $key, @args) or $cmd_cv->send ($default);
             } else {
@@ -252,7 +265,7 @@ sub DESTROY {
 
     my $multi = sub {
         my ($command) = @_;
-        my $subname = "__$command";
+        my $subname = "__${command}_multi";
         sub {
             my ($self, @args) = @_;
 
@@ -286,13 +299,13 @@ sub DESTROY {
     *add = $keyed->("add", 0);
 
 
-    *add_multi = $multi->("add_multi");
+    *add_multi = $multi->("add");
 
 
     *append = $keyed->("append", 0);
 
 
-    *append_multi = $multi->("append_multi");
+    *append_multi = $multi->("append");
 
 
     *decr = $keyed->("decr", undef);
@@ -304,7 +317,7 @@ sub DESTROY {
     *delete = $keyed->("delete", 0);
 
 
-    *delete_multi = $multi->("delete_multi");
+    *delete_multi = $multi->("delete");
 
 
     *flush_all = $broadcast->("flush_all");
@@ -313,13 +326,19 @@ sub DESTROY {
     *get = $keyed->("get", undef);
 
 
-    *get_multi = $multi->("get_multi");
+    *get_multi = $multi->("get");
 
 
     *incr = $keyed->("incr", undef);
 
 
+    *incr_multi = $multi->("incr");
+
+
     *prepend = $keyed->("prepend", 0);
+
+
+    *prepend_multi = $multi->("prepend");
 
 
     *remove = $keyed->("delete", 0);
@@ -328,7 +347,13 @@ sub DESTROY {
     *replace = $keyed->("replace", 0);
 
 
+    *replace_multi = $multi->("replace");
+
+
     *set = $keyed->("set", 0);
+
+
+    *set_multi = $multi->("set");
 
 
     *stats = $broadcast->("stats");
@@ -343,8 +368,9 @@ sub DESTROY {
 
 sub __hash {
     my ($self, $key) = @_;
+    $key = $self->{preprocessor}->($key) if ($self->{preprocessor});
     return unless (defined $key and (ref $key and $key->[0] and $key->[1]) || (length $key and -1 == index $key, " "));
-    return $self->{selector}->get_server ($key, $self->{hash_namespace} ? $self->{namespace} : "");
+    return ($key, $self->{selector}->get_server ($key, $self->{hash_namespace} ? $self->{namespace} : ""));
 }
 
 {
@@ -387,10 +413,10 @@ sub __hash {
             # DEBUG "Tuples are %s", $tuples;
             for my $tuple (@{$tuples}) {
                 # DEBUG "Tuple is %s", $tuple;
-                my ($key, $value, $expiration) = @{$tuple};
-                $expiration = int ($expiration || 0);
-                $rv{$key} = 0;
-                if (my $server = $self->__hash ($key)) {
+                if (my ($key, $server) = $self->__hash (shift @{$tuple})) {
+                    my ($value, $expiration) = @{$tuple};
+                    $expiration = int ($expiration || 0);
+                    $rv{$key} = 0;
                     # DEBUG "C: $command %s", $server;
                     $cmd_cv->begin;
                     $self->{servers}->{$server}->enqueue (sub {
@@ -404,9 +430,8 @@ sub __hash {
                                                               $self->{protocol}->$subname ($handle, $server_cv, $self->{namespace} . (ref $key ? $key->[1] : $key), $data, $flags, $expiration);
                                                           }, sub {$cmd_cv->end});
                 }
-
-                $cmd_cv->end;
             }
+            $cmd_cv->end;
         }
     };
 
@@ -448,33 +473,41 @@ sub __hash {
             my ($self, $cmd_cv, $wantarray, $tuples) = @_;
             # DEBUG "C [%s]: %s", $subname, join " ", map {defined $_ ? "[$_]" : "[undef]"} @_;
             my (%rv);
+            # DEBUG "Begin on command CV to establish callback";
             $cmd_cv->begin (sub {$_[0]->send (\%rv)});
             # DEBUG "Tuples are %s", $tuples;
             for my $tuple (@{$tuples}) {
                 # DEBUG "Tuple is %s", $tuple;
-                my ($key, $delta, $initial) = @{$tuple};
-                $rv{$key} = 0;
-                if (my $server = $self->__hash ($key)) {
+                if (my ($key, $server) = $self->__hash (shift @{$tuple})) {
+                    # DEBUG "keys is %s, server is %s", $key, $server;
+                    my ($delta, $initial) = @{$tuple};
+                    $delta //= 1;
                     # DEBUG "C: $command %s", $server;
+                    # DEBUG "Begin on command CV before enqueue";
                     $cmd_cv->begin;
                     $self->{servers}->{$server}->enqueue (sub {
                                                               my ($handle, $completion, $server) = @_;
                                                               my $server_cv = AE::cv {
                                                                   $completion->();
                                                                   $rv{$key} = $_[0]->recv;
+                                                                  # DEBUG "End on command CV from server CV";
                                                                   $cmd_cv->end;
                                                               };
                                                               $self->{protocol}->$subname ($handle, $server_cv, $self->{namespace} . (ref $key ? $key->[1] : $key), $delta, $initial);
-                                                          }, sub {$cmd_cv->end});
+                                                          }, sub {
+                                                              # DEBUG "End on command CV from error callback";
+                                                              $cmd_cv->end
+                                                          });
                 }
-
-                $cmd_cv->end;
             }
+
+            # DEBUG "End on command CV ";
+            $cmd_cv->end;
         }
     };
 
     *__incr_multi = $generator->("incr");
-    *__decr_multi = $generator->("append");
+    *__decr_multi = $generator->("decr");
 }
 
 sub __delete {
@@ -497,9 +530,9 @@ sub __delete_multi {
     $cmd_cv->begin (sub {$_[0]->send (\%rv)});
     # DEBUG "Keys are %s", \@keys;
     for my $key (@keys) {
-        # DEBUG "key is %s", $key;
-        $rv{$key} = 0;
-        if (my $server = $self->__hash ($key)) {
+        if (my ($key, $server) = $self->__hash ($key)) {
+            # DEBUG "key is %s", $key;
+            $rv{$key} = 0;
             # DEBUG "C: delete_multi %s", $server;
             $cmd_cv->begin;
             $self->{servers}->{$server}->enqueue (sub {
@@ -512,9 +545,8 @@ sub __delete_multi {
                                                       $self->{protocol}->__delete ($handle, $server_cv, $self->{namespace} . (ref $key ? $key->[1] : $key));
                                                   }, sub {$cmd_cv->end});
         }
-
-        $cmd_cv->end;
     }
+    $cmd_cv->end;
 }
 
 sub __get {
@@ -541,7 +573,7 @@ sub __get_multi {
     # DEBUG "C [get_multi]: %s", join " ", map {defined $_ ? "[$_]" : "[undef]"} @_;
     my (%requests);
     for my $key (@{$keys}) {
-        if (my $server = $self->__hash ($key)) {
+        if (my ($key, $server) = $self->__hash ($key)) {
             push @{$requests{$server}}, $self->{namespace} . (ref $key ? $key->[1] : $key);
         }
     }
@@ -585,7 +617,7 @@ Memcached::Client - All-singing, all-dancing Perl client for Memcached
 
 =head1 VERSION
 
-version 0.97
+version 0.98
 
 =head1 SYNOPSIS
 
@@ -656,6 +688,20 @@ hashing.  This is not defined by default.
 This parameter is only made available for compatiblity with
 Cache::Memcached, and is ignored.  Memcached::Client will never
 rehash.
+
+=item C<preprocessor> => C<undef>
+
+This allows you to set a preprocessor routine to normalize all keys
+before they're sent to the server.  Expects a coderef that will
+transform its first argument and then return it.  The identity
+preprocessor would be:
+
+ sub {
+     return $_[0];
+ }
+
+This can be useful for mapping keys to a consistent case or encoding
+them as to allow spaces in keys or the like.
 
 =item C<procotol> => C<Text>
 
@@ -731,6 +777,18 @@ Whether to prepend the namespace to the key before hashing, or after
 
 This routine returns the current setting, and sets it to the new value
 if it's handed one.
+
+=head2 set_preprocessor
+
+Sets a routine to preprocess keys before they are transmitted.
+
+If you want to do some transformation to all keys before they hit the
+wire, give this a subroutine reference and it will be run across all
+keys.
+
+=head2 __preprocess
+
+Preprocess keys before they are transmitted.
 
 =head2 set_servers()
 
@@ -871,6 +929,20 @@ supplied, the key will be set to that value.
 If the incr succeeds, the resulting value will be returned, otherwise
 undef will be the result.
 
+=head2 incr_multi
+
+[$value = ] incr_multi (\@($key, [$delta (= 1), $initial]), $cb-E<gt>($value) || $cv])
+
+If the specified key already exists in the cache, it will be
+incremented by the specified delta value, or 1 if no delta is
+specified.
+
+If the value does not exist in the cache, and an initial value is
+supplied, the key will be set to that value.
+
+If the incr succeeds, the resulting value will be returned, otherwise
+undef will be the result.
+
 =head2 prepend($key, $value, $cb->($rc));
 
 [$rc = ] append ($key, $value[, $cb-E<gt>($rc) || $cv])
@@ -880,6 +952,18 @@ specified content prepended to it.
 
 If the prepend succeeds, 1 will be returned, if it fails, 0 will be
 returned.
+
+=head2 prepend_multi
+
+[$rc = ] prepend_multi (\@([$key, $value, $exptime]), [$cb-E<gt>($rc) || $cv])
+
+Given an arrayref of [key, value, $exptime] tuples, iterate over them
+and if the specified key already exists in the cache, it will have the
+the specified value prepended to it.  If an expiration is included, it
+will determine the lifetime of the object on the server.
+
+Returns a hashref of [key, boolean] tuples, where 1 means the add
+succeeded, 0 means it failed.
 
 =head2 remove
 
@@ -897,16 +981,38 @@ of the object on the server.
 If the replace succeeds, 1 will be returned, if it fails, 0 will be
 returned.
 
+=head2 replace_multi
+
+[$rc = ] replace_multi (\@([$key, $value, $exptime]), [$cb-E<gt>($rc) || $cv])
+
+Given an arrayref of [key, value, $exptime] tuples, iterate over them
+and if the specified key already exists in the cache, it will be set
+to the specified value.  If an expiration is included, it will
+determine the lifetime of the object on the server.
+
+Returns a hashref of [key, boolean] tuples, where 1 means the replace
+succeeded, 0 means it failed.
+
 =head2 set()
 
 [$rc = ] set ($key, $value[, $exptime, $cb-E<gt>($rc) || $cv])
 
-If the specified key does not already exist in the cache, it will be
-set to the specified value.  If an expiration is included, it will
-determine the lifetime of the object on the server.
+Set the specified key to the specified value.  If an expiration is
+included, it will determine the lifetime of the object on the server.
 
-If the add succeeds, 1 will be returned, if it fails, 0 will be
+If the set succeeds, 1 will be returned, if it fails, 0 will be
 returned.
+
+=head2 set_multi
+
+[$rc = ] add_multi (\@([$key, $value, $exptime]), [$cb-E<gt>($rc) || $cv])
+
+Given an arrayref of [key, value, $exptime] tuples, iterate over them
+and set the specified key to the specified value.  If an expiration is
+included, it will determine the lifetime of the object on the server.
+
+Returns a hashref of [key, boolean] tuples, where 1 means the set
+succeeded, 0 means it failed.
 
 =head2 stats ()
 
