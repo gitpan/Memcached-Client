@@ -1,6 +1,6 @@
 package Memcached::Client::Protocol;
 BEGIN {
-  $Memcached::Client::Protocol::VERSION = '0.98';
+  $Memcached::Client::Protocol::VERSION = '0.99';
 }
 # ABSTRACT: Base Class For Memcached::Client Protocol implementations
 
@@ -30,7 +30,7 @@ Memcached::Client::Protocol - Base Class For Memcached::Client Protocol implemen
 
 =head1 VERSION
 
-version 0.98
+version 0.99
 
 =head1 SYNOPSIS
 

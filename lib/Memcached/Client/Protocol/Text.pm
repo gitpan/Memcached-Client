@@ -1,6 +1,6 @@
 package Memcached::Client::Protocol::Text;
 BEGIN {
-  $Memcached::Client::Protocol::Text::VERSION = '0.98';
+  $Memcached::Client::Protocol::Text::VERSION = '0.99';
 }
 # ABSTRACT: Implements original text-based memcached protocol
 
@@ -186,7 +186,7 @@ Memcached::Client::Protocol::Text - Implements original text-based memcached pro
 
 =head1 VERSION
 
-version 0.98
+version 0.99
 
 =head1 AUTHOR
 

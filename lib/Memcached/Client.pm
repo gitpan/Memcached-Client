@@ -1,6 +1,6 @@
 package Memcached::Client;
 BEGIN {
-  $Memcached::Client::VERSION = '0.98';
+  $Memcached::Client::VERSION = '0.99';
 }
 # ABSTRACT: All-singing, all-dancing Perl client for Memcached
 
@@ -8,7 +8,7 @@ use strict;
 use warnings;
 use AnyEvent qw{};
 use AnyEvent::Handle qw{};
-use Carp qw{carp};
+use Carp qw{carp cluck};
 use Memcached::Client::Connection qw{};
 use Memcached::Client::Log qw{DEBUG INFO};
 use Module::Load;
@@ -20,7 +20,7 @@ sub new {
 
     # DEBUG "C: new - %s", \%args;
 
-    carp "You declared a callback but are also expecting a return value" if ($args{callback} and defined wantarray);
+    cluck "You declared a callback but are also expecting a return value" if ($args{callback} and defined wantarray);
 
     my $self = bless {}, $class;
 
@@ -158,14 +158,14 @@ sub DESTROY {
             if (ref $args[$#args] eq 'AnyEvent::CondVar') {
                 $cmd_cv = pop @args;
                 # DEBUG "C [%s]: Found condvar", $command;
-                carp "You gave us a condvar but are also expecting a return value" if (defined wantarray);
+                cluck "You gave us a condvar but are also expecting a return value" if (defined wantarray);
             } elsif (ref $args[$#args] eq 'CODE') {
                 $callback = pop @args;
                 # DEBUG "C [%s]: Found callback", $command;
-                carp "You declared a callback but are also expecting a return value" if (defined wantarray);
+                cluck "You declared a callback but are also expecting a return value" if (defined wantarray);
             } else {
                 # DEBUG "C [%s]: No callback or condvar: %s", $command, ref $args[$#args];
-                carp "You have no callback, but aren't waiting for a return value" unless (defined wantarray);
+                cluck "You have no callback, but aren't waiting for a return value" unless (defined wantarray);
             }
 
             $cmd_cv ||= AE::cv;
@@ -189,7 +189,7 @@ sub DESTROY {
             }
             $cmd_cv->end;
             # DEBUG "C: %s", $callback ? "using callback" : "using condvar";
-            $cmd_cv->recv unless ($callback);
+            $cmd_cv->recv unless ($callback or ($cmd_cv eq $_[$#_]));
         }
     };
 
@@ -223,14 +223,14 @@ sub DESTROY {
             if (ref $args[$#args] eq 'AnyEvent::CondVar') {
                 $cmd_cv = pop @args;
                 # DEBUG "C [%s]: Found condvar", $command;
-                carp "You gave us a condvar but are also expecting a return value" if (defined wantarray);
+                cluck "You gave us a condvar but are also expecting a return value" if (defined wantarray);
             } elsif (ref $args[$#args] eq 'CODE') {
                 $callback = pop @args;
                 # DEBUG "C [%s]: Found callback", $command;
-                carp "You declared a callback but are also expecting a return value" if (defined wantarray);
+                cluck "You declared a callback but are also expecting a return value" if (defined wantarray);
             } else {
                 # DEBUG "C [%s]: No callback or condvar: %s", $command, ref $args[$#args];
-                carp "You have no callback, but aren't waiting for a return value" unless (defined wantarray);
+                cluck "You have no callback, but aren't waiting for a return value" unless (defined wantarray);
             }
 
             # Even if we're given a callback, we proxy it through a CV of our own creation
@@ -245,7 +245,7 @@ sub DESTROY {
             }
 
             # DEBUG "C [%s]: %s", $command, $callback ? "using callback" : "using condvar";
-            ($cmd_cv->recv || $default) unless ($callback);
+            ($cmd_cv->recv || $default) unless ($callback or ($cmd_cv eq $_[$#_]));
         }
     };
 
@@ -273,14 +273,14 @@ sub DESTROY {
             if (ref $args[$#args] eq 'AnyEvent::CondVar') {
                 $cmd_cv = pop @args;
                 # DEBUG "C [%s]: Found condvar", $command;
-                carp "You gave us a condvar but are also expecting a return value" if (defined wantarray);
+                cluck "You gave us a condvar but are also expecting a return value" if (defined wantarray);
             } elsif (ref $args[$#args] eq 'CODE') {
                 $callback = pop @args;
                 # DEBUG "C [%s]: Found callback", $command;
-                carp "You declared a callback but are also expecting a return value" if (defined wantarray);
+                cluck "You declared a callback but are also expecting a return value" if (defined wantarray);
             } else {
                 # DEBUG "C [%s]: No callback or condvar: %s", $command, ref $args[$#args];
-                carp "You have no callback, but aren't waiting for a return value" unless (defined wantarray);
+                cluck "You have no callback, but aren't waiting for a return value" unless (defined wantarray);
             }
 
             # Even if we're given a callback, we proxy it through a CV of our own creation
@@ -291,7 +291,7 @@ sub DESTROY {
             $self->$subname ($cmd_cv, wantarray, @args);
 
             # DEBUG "C: %s", $callback ? "using callback" : "using condvar";
-            $cmd_cv->recv unless ($callback);
+            $cmd_cv->recv unless ($callback or ($cmd_cv eq $_[$#_]));
         }
     };
 
@@ -617,7 +617,7 @@ Memcached::Client - All-singing, all-dancing Perl client for Memcached
 
 =head1 VERSION
 
-version 0.98
+version 0.99
 
 =head1 SYNOPSIS
 
