@@ -1,6 +1,6 @@
 package Memcached::Client::Compressor;
 BEGIN {
-  $Memcached::Client::Compressor::VERSION = '1.99_01';
+  $Memcached::Client::Compressor::VERSION = '1.99_02';
 }
 #ABSTRACT: Abstract Base Class For Memcached::Client Compressor
 
@@ -52,7 +52,7 @@ Memcached::Client::Compressor - Abstract Base Class For Memcached::Client Compre
 
 =head1 VERSION
 
-version 1.99_01
+version 1.99_02
 
 =head1 SYNOPSIS
 

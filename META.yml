@@ -31,4 +31,4 @@ requires:
   String::CRC32: 0
   bytes: 0
   constant: 0
-version: 1.99_01
+version: 1.99_02

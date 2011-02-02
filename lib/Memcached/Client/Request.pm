@@ -1,6 +1,6 @@
 package Memcached::Client::Request;
 BEGIN {
-  $Memcached::Client::Request::VERSION = '1.99_01';
+  $Memcached::Client::Request::VERSION = '1.99_02';
 }
 # ABSTRACT: Base class for Memcached::Client request drivers
 
@@ -83,7 +83,7 @@ sub run {
 
 package Memcached::Client::Request::Add;
 BEGIN {
-  $Memcached::Client::Request::Add::VERSION = '1.99_01';
+  $Memcached::Client::Request::Add::VERSION = '1.99_02';
 }
 # ABSTRACT: Driver for Memcached::Client add-style requests
 
@@ -110,7 +110,7 @@ sub process {
 
 package Memcached::Client::Request::AddMulti;
 BEGIN {
-  $Memcached::Client::Request::AddMulti::VERSION = '1.99_01';
+  $Memcached::Client::Request::AddMulti::VERSION = '1.99_02';
 }
 # ABSTRACT: Driver for multiple Memcached::Client add-style requests
 
@@ -119,7 +119,7 @@ use base qw{Memcached::Client::Request};
 
 
 sub process {
-    my ($self, $requests) = @_;
+    my ($self, @requests) = @_;
     $self->{default} = {};
     $self->{partial} = 0;
     return grep {$_} map {
@@ -137,7 +137,7 @@ sub process {
             $self->log ("%d queries outstanding", $self->{partial}) if DEBUG;
             $request;
         }
-    } @{$requests};
+    } @requests;
 }
 
 *Memcached::Client::add_multi = Memcached::Client::Request::AddMulti->generate ("add");
@@ -148,7 +148,7 @@ sub process {
 
 package Memcached::Client::Request::Decr;
 BEGIN {
-  $Memcached::Client::Request::Decr::VERSION = '1.99_01';
+  $Memcached::Client::Request::Decr::VERSION = '1.99_02';
 }
 # ABSTRACT: Driver for multiple Memcached::Client decr-style requests
 
@@ -173,7 +173,7 @@ sub process {
 
 package Memcached::Client::Request::DecrMulti;
 BEGIN {
-  $Memcached::Client::Request::DecrMulti::VERSION = '1.99_01';
+  $Memcached::Client::Request::DecrMulti::VERSION = '1.99_02';
 }
 # ABSTRACT: Driver for multiple Memcached::Client decr-style requests
 
@@ -182,7 +182,7 @@ use base qw{Memcached::Client::Request};
 
 
 sub process {
-    my ($self, $requests) = @_;
+    my ($self, @requests) = @_;
     $self->{default} = {};
     $self->{partial} = 0;
     return grep {defined} map {
@@ -195,12 +195,12 @@ sub process {
             $self->result unless (--$self->{partial});
             $self->log ("%d queries outstanding", $self->{partial}) if DEBUG;
         };
-        if ($request->process (@{$_})) {
+        if ($request->process (ref $_ ? @{$_} : $_)) {
             $self->{partial}++;
             $self->log ("%d queries outstanding", $self->{partial}) if DEBUG;
             $request;
         }
-    } @{$requests};
+    } @requests;
 }
 
 *Memcached::Client::decr_multi = Memcached::Client::Request::DecrMulti->generate ("decr");
@@ -208,7 +208,7 @@ sub process {
 
 package Memcached::Client::Request::Delete;
 BEGIN {
-  $Memcached::Client::Request::Delete::VERSION = '1.99_01';
+  $Memcached::Client::Request::Delete::VERSION = '1.99_02';
 }
 # ABSTRACT: Driver for Memcached::Client delete requests
 
@@ -230,7 +230,7 @@ sub process {
 
 package Memcached::Client::Request::DeleteMulti;
 BEGIN {
-  $Memcached::Client::Request::DeleteMulti::VERSION = '1.99_01';
+  $Memcached::Client::Request::DeleteMulti::VERSION = '1.99_02';
 }
 # ABSTRACT: Driver for multiple Memcached::Client delete requests
 
@@ -264,7 +264,7 @@ sub process {
 
 package Memcached::Client::Request::Get;
 BEGIN {
-  $Memcached::Client::Request::Get::VERSION = '1.99_01';
+  $Memcached::Client::Request::Get::VERSION = '1.99_02';
 }
 # ABSTRACT: Driver for Memcached::Client get requests
 
@@ -286,7 +286,7 @@ sub process {
 
 package Memcached::Client::Request::GetMulti;
 BEGIN {
-  $Memcached::Client::Request::GetMulti::VERSION = '1.99_01';
+  $Memcached::Client::Request::GetMulti::VERSION = '1.99_02';
 }
 # ABSTRACT: Driver for multiple Memcached::Client get requests
 
@@ -320,7 +320,7 @@ sub process {
 
 package Memcached::Client::Request::Broadcast;
 BEGIN {
-  $Memcached::Client::Request::Broadcast::VERSION = '1.99_01';
+  $Memcached::Client::Request::Broadcast::VERSION = '1.99_02';
 }
 # ABSTRACT: Class to manage Memcached::Client server requests
 
@@ -335,7 +335,7 @@ sub process {
 
 package Memcached::Client::Request::BroadcastMulti;
 BEGIN {
-  $Memcached::Client::Request::BroadcastMulti::VERSION = '1.99_01';
+  $Memcached::Client::Request::BroadcastMulti::VERSION = '1.99_02';
 }
 # ABSTRACT: Class to manage Memcached::Client broadcast requests
 
@@ -375,7 +375,7 @@ sub server {
 
 package Memcached::Client::Request::Connect;
 BEGIN {
-  $Memcached::Client::Request::Connect::VERSION = '1.99_01';
+  $Memcached::Client::Request::Connect::VERSION = '1.99_02';
 }
 # ABSTRACT: Class to manage Memcached::Client server request
 
@@ -390,7 +390,7 @@ sub process {
 
 package Memcached::Client::Request::ConnectMulti;
 BEGIN {
-  $Memcached::Client::Request::ConnectMulti::VERSION = '1.99_01';
+  $Memcached::Client::Request::ConnectMulti::VERSION = '1.99_02';
 }
 # ABSTRACT: Class to manage Memcached::Client connection requests
 
@@ -433,7 +433,7 @@ Memcached::Client::Request - Base class for Memcached::Client request drivers
 
 =head1 VERSION
 
-version 1.99_01
+version 1.99_02
 
 =head1 SYNOPSIS
 
