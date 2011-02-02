@@ -7,9 +7,6 @@ use Memcached::Client qw{};
 use Storable qw{dclone freeze thaw};
 use t::Memcached::Manager qw{};
 
-#use Aspect;
-#aspect NYTProf => call qr/^Memcached::Client::/ & ! call qr/^Memcached::Client::Log/;
-
 my @tests = (['connect', 1,
               '->connect'],
 
@@ -24,7 +21,7 @@ my @tests = (['connect', 1,
               '->set with a value'],
              ['set', ['37', 'llama'], 'bar',
               '->set with a pre-hashed key'],
-             ['set_multi', [['teatime', 3], ['bagman', 'ludo']],
+             ['set_multi', ['teatime', 3], ['bagman', 'ludo'],
               '->set_multi with various keys'],
 
              ['add',
@@ -35,9 +32,9 @@ my @tests = (['connect', 1,
               '->add with a value'],
              ['add', 'bar', 'foo',
               '->add with an existing value'],
-             ['add_multi', [['teatime', 3], ['bagman', 'ludo']],
+             ['add_multi', ['teatime', 3], ['bagman', 'ludo'],
               '->set_multi with various pre-existing keys'],
-             ['add_multi', [['porridge', 'salty'], ['complex', 'simple'], ['bagman', 'horace']],
+             ['add_multi', ['porridge', 'salty'], ['complex', 'simple'], ['bagman', 'horace'],
               '->set_multi with various keys'],
 
              ['set', ['19', 'ding-dong'], 'bar',
@@ -69,7 +66,7 @@ my @tests = (['connect', 1,
               '->replace with a non-existent value'],
              ['replace', 'bar', 'gondola',
               '->replace with an existing value'],
-             ['replace_multi', [['porridge', 'sweet'], ['complex', 'NP'], ['ludo', 'panopticon']],
+             ['replace_multi', ['porridge', 'sweet'], ['complex', 'NP'], ['ludo', 'panopticon'],
               '->replace_multi with various keys'],
 
              ['get', 'bar',
@@ -96,7 +93,7 @@ my @tests = (['connect', 1,
               '->append with a non-existent value'],
              ['append', 'bar', 'gorp',
               '->append with an existing value'],
-             ['append_multi', [['porridge', ' and salty'], ['complex', ' != P']],
+             ['append_multi', ['porridge', ' and salty'], ['complex', ' != P'],
               '->append_multi with various keys'],
 
              ['get', 'bar',
@@ -117,7 +114,7 @@ my @tests = (['connect', 1,
               '->prepend with a non-existent value'],
              ['prepend', 'foo', 'gorp',
               '->prepend with an existing value'],
-             ['prepend_multi', [['porridge', 'We love ']],
+             ['prepend_multi', ['porridge', 'We love '],
               '->prepend_multi with various keys'],
 
 
@@ -166,13 +163,13 @@ my @tests = (['connect', 1,
              ['get_multi', 'bar', 'foo',
               '->get with all keys set so far'],
 
-             ['incr_multi', [['foo']],
+             ['incr_multi', 'foo',
               '->incr_multi with various keys'],
 
-             ['incr_multi', [['braga', 1, 17], ['foo', 7]],
+             ['incr_multi', ['braga', 1, 17], ['foo', 7],
               '->incr_multi with various keys'],
 
-             ['decr_multi', [['braga', 3], ['bartinate', 7, 33]],
+             ['decr_multi', ['braga', 3], ['bartinate', 7, 33],
               '->decr_multi with various keys'],
 
              ['flush_all',
@@ -183,13 +180,10 @@ my @tests = (['connect', 1,
 
 die 'No memcached found' unless my $memcached = find_memcached ();
 
-my $servers = [['127.0.0.1:10001', 2],
-               ['127.0.0.1:10002', 2],
-               ['127.0.0.1:10003', 3],
-               ['127.0.0.1:10004', 3],
-               ['127.0.0.1:10005', 3],
-               ['127.0.0.1:10006', 3],
-               '127.0.0.1:10007'];
+my $servers = ['127.0.0.1:10001',
+               '127.0.0.1:10002',
+               '127.0.0.1:10003',
+               '127.0.0.1:10004'];
 
 my $manager = t::Memcached::Manager->new (memcached => $memcached, servers => $servers);
 
@@ -210,7 +204,7 @@ sub async {
     printf "T: running %s/%s async\n", $selector, $protocol;
     my @tests = @{thaw $tests};
     my $cv = AE::cv;
-    DB::enable_profile();
+    DB::enable_profile() if defined $ENV{NYTPROF};
     my $test; $test = sub {
         my ($method, @args) = @{shift @tests};
         my $msg = pop @args;
@@ -225,7 +219,7 @@ sub async {
                           });
     };
     $test->();
-    DB::disable_profile();
+    DB::disable_profile() if defined $ENV{NYTPROF};
     $cv->recv;
 }
 
@@ -237,9 +231,9 @@ sub sync {
         my ($method, @args) = @{shift @tests};
         my $msg = pop @args;
         printf "T: %s is %s (%s)\n", $msg, $method, join ",", @args;
-        DB::enable_profile();
+        DB::enable_profile() if defined $ENV{NYTPROF};
         my $received = $client->$method (@args);
-        DB::disable_profile();
+        DB::disable_profile() if defined $ENV{NYTPROF};
         last unless (@tests);
     }
 }

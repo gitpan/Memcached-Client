@@ -1,6 +1,6 @@
 package Memcached::Client::Serializer::JSON;
 BEGIN {
-  $Memcached::Client::Serializer::JSON::VERSION = '1.99_02';
+  $Memcached::Client::Serializer::JSON::VERSION = '1.99_03';
 }
 #ABSTRACT: Implements Memcached Serializing using JSON
 
@@ -60,7 +60,7 @@ Memcached::Client::Serializer::JSON - Implements Memcached Serializing using JSO
 
 =head1 VERSION
 
-version 1.99_02
+version 1.99_03
 
 =head1 METHODS
 

@@ -1,6 +1,6 @@
 package Memcached::Client::Request;
 BEGIN {
-  $Memcached::Client::Request::VERSION = '1.99_02';
+  $Memcached::Client::Request::VERSION = '1.99_03';
 }
 # ABSTRACT: Base class for Memcached::Client request drivers
 
@@ -16,31 +16,30 @@ sub generate {
     $class->log ("Class is %s, Command is %s", $class, $command) if DEBUG;
     return sub {
         my ($client, @args) = @_;
-        local *__ANON__ = "Memcached::Client::Request::${class}::new";
 
         my $request = bless {command => $command}, $class;
-        $request->log ("Request is %s", $request) if DEBUG;
+        $class->log ("Request is %s", $request) if DEBUG;
 
-        $request->log ("Checking for condvar/callback") if DEBUG;
+        $class->log ("Checking for condvar/callback") if DEBUG;
         if (ref $args[-1] eq 'AnyEvent::CondVar' or ref $args[-1] eq 'CODE') {
-            $request->log ("Found condvar/callback") if DEBUG;
+            $class->log ("Found condvar/callback") if DEBUG;
             $request->{cb} = pop @args;
         } else {
-            $request->log ("Making own condvar") if DEBUG;
+            $class->log ("Making own condvar") if DEBUG;
             $request->{cb} = AE::cv;
             $request->{wait} = 1;
         }
 
-        $request->log ("Processing arguments: %s", \@args) if DEBUG;
+        $class->log ("Processing arguments: %s", \@args) if DEBUG;
         my @requests = $request->process (@args);
         if (@requests) {
-            $request->log ("Submitting request(s)") if DEBUG;
+            $class->log ("Submitting request(s)") if DEBUG;
             $client->__submit (@requests);
         } else {
             $request->result;
         }
 
-        $request->log ("Checking whether to wait") if DEBUG;
+        $class->log ("Checking whether to wait") if DEBUG;
         $request->{cb}->recv if ($request->{wait});
     }
 }
@@ -55,12 +54,10 @@ sub log {
 
 
 sub result {
-    my ($self, $value) = @_;
-    $self->log ("$self received result %s", $value) if DEBUG;
-    my @values;
-    if (defined $value) {
+    my ($self, @values) = @_;
+    $self->log ("$self received result %s", \@values) if DEBUG;
+    if (scalar @values) {
         $self->log ("We have a result") if DEBUG;
-        push @values, $value;
     } elsif (defined $self->{result}) {
         $self->log ("We have a stored result") if DEBUG;
         push @values, $self->{result};
@@ -74,16 +71,9 @@ sub result {
     $self->{cb}->(@values);
 }
 
-
-sub run {
-    my ($self, $connection, $protocol) = @_;
-    my $command = $self->{type};
-    $protocol->$command ($connection, $self);
-}
-
 package Memcached::Client::Request::Add;
 BEGIN {
-  $Memcached::Client::Request::Add::VERSION = '1.99_02';
+  $Memcached::Client::Request::Add::VERSION = '1.99_03';
 }
 # ABSTRACT: Driver for Memcached::Client add-style requests
 
@@ -94,12 +84,12 @@ use base qw{Memcached::Client::Request};
 sub process {
     my ($self, $key, $value, $expiration) = @_;
     $self->{default} = 0;
+    return () unless (defined $key and defined $value);
     $self->{expiration} = int ($expiration || 0);
     $self->{key} = $key;
     $self->{type} = "__add";
     $self->{value} = $value;
-    return $self if ($self->{key} and $self->{value});
-    return ();
+    return $self;
 }
 
 *Memcached::Client::add = Memcached::Client::Request::Add->generate ("add");
@@ -110,7 +100,7 @@ sub process {
 
 package Memcached::Client::Request::AddMulti;
 BEGIN {
-  $Memcached::Client::Request::AddMulti::VERSION = '1.99_02';
+  $Memcached::Client::Request::AddMulti::VERSION = '1.99_03';
 }
 # ABSTRACT: Driver for multiple Memcached::Client add-style requests
 
@@ -120,13 +110,13 @@ use base qw{Memcached::Client::Request};
 
 sub process {
     my ($self, @requests) = @_;
-    $self->{default} = {};
+    $self->{result} = {};
+    return () unless @requests;
     $self->{partial} = 0;
     return grep {$_} map {
         my $request = bless {command => $self->{command}, sendkey => 1}, "Memcached::Client::Request::Add";
         $request->{cb} = sub {
             my ($key, $value) = @_;
-            local *__ANON__ = "Memcached::Client::Request::AddMulti::callback";
             $self->log ("Noting that we received %s for %s", $value, $key) if DEBUG;
             $self->{result}->{$key} = $value if (defined $value);
             $self->result unless (--$self->{partial});
@@ -148,7 +138,7 @@ sub process {
 
 package Memcached::Client::Request::Decr;
 BEGIN {
-  $Memcached::Client::Request::Decr::VERSION = '1.99_02';
+  $Memcached::Client::Request::Decr::VERSION = '1.99_03';
 }
 # ABSTRACT: Driver for multiple Memcached::Client decr-style requests
 
@@ -158,14 +148,13 @@ use base qw{Memcached::Client::Request};
 
 sub process {
     my ($self, $key, $delta, $initial) = @_;
+    return () unless (defined $key);
     $self->log ("arguments are %s", \@_) if DEBUG;
     $self->{data} = defined $initial ? int ($initial) : undef;
-    $self->{default} = undef;
     $self->{delta} = int ($delta || 1);
     $self->{key} = $key;
     $self->{type} = "__decr";
-    return $self if ($self->{key} and $self->{delta});
-    return ();
+    return $self;
 }
 
 *Memcached::Client::decr = Memcached::Client::Request::Decr->generate ("decr");
@@ -173,7 +162,7 @@ sub process {
 
 package Memcached::Client::Request::DecrMulti;
 BEGIN {
-  $Memcached::Client::Request::DecrMulti::VERSION = '1.99_02';
+  $Memcached::Client::Request::DecrMulti::VERSION = '1.99_03';
 }
 # ABSTRACT: Driver for multiple Memcached::Client decr-style requests
 
@@ -183,13 +172,13 @@ use base qw{Memcached::Client::Request};
 
 sub process {
     my ($self, @requests) = @_;
-    $self->{default} = {};
+    $self->{result} = {};
+    return () unless (@requests);
     $self->{partial} = 0;
     return grep {defined} map {
         my $request = bless {command => $self->{command}, sendkey => 1}, "Memcached::Client::Request::Decr";
         $request->{cb} = sub {
             my ($key, $value) = @_;
-            local *__ANON__ = "Memcached::Client::Request::DecrMulti::callback";
             $self->log ("Noting that we received %s for %s", $value, $key) if DEBUG;
             $self->{result}->{$key} = $value if (defined $value);
             $self->result unless (--$self->{partial});
@@ -208,7 +197,7 @@ sub process {
 
 package Memcached::Client::Request::Delete;
 BEGIN {
-  $Memcached::Client::Request::Delete::VERSION = '1.99_02';
+  $Memcached::Client::Request::Delete::VERSION = '1.99_03';
 }
 # ABSTRACT: Driver for Memcached::Client delete requests
 
@@ -218,19 +207,19 @@ use base qw{Memcached::Client::Request};
 
 sub process {
     my ($self, $key) = @_;
-    $self->log ("arguments are %s", \@_) if DEBUG;
     $self->{default} = 0;
+    return () unless (defined $key);
+    $self->log ("arguments are %s", \@_) if DEBUG;
     $self->{key} = $key;
     $self->{type} = "__delete";
-    return $self if ($self->{key});
-    return ();
+    return $self;
 }
 
 *Memcached::Client::delete = Memcached::Client::Request::Delete->generate ("delete");
 
 package Memcached::Client::Request::DeleteMulti;
 BEGIN {
-  $Memcached::Client::Request::DeleteMulti::VERSION = '1.99_02';
+  $Memcached::Client::Request::DeleteMulti::VERSION = '1.99_03';
 }
 # ABSTRACT: Driver for multiple Memcached::Client delete requests
 
@@ -240,13 +229,13 @@ use base qw{Memcached::Client::Request};
 
 sub process {
     my ($self, @keys) = @_;
-    $self->{default} = {};
+    $self->{result} = {};
+    return () unless (@keys);
     $self->{partial} = 0;
     return grep {$_} map {
         my $request = bless {command => $self->{command}, sendkey => 1}, "Memcached::Client::Request::Delete";
         $request->{cb} = sub {
             my ($key, $value) = @_;
-            local *__ANON__ = "Memcached::Client::Request::DeleteMulti::callback";
             $self->log ("Noting that we received %s for %s", $value, $key) if DEBUG;
             $self->{result}->{$key} = $value if (defined $value);
             $self->result unless (--$self->{partial});
@@ -264,7 +253,7 @@ sub process {
 
 package Memcached::Client::Request::Get;
 BEGIN {
-  $Memcached::Client::Request::Get::VERSION = '1.99_02';
+  $Memcached::Client::Request::Get::VERSION = '1.99_03';
 }
 # ABSTRACT: Driver for Memcached::Client get requests
 
@@ -274,19 +263,18 @@ use base qw{Memcached::Client::Request};
 
 sub process {
     my ($self, $key) = @_;
+    return () unless (defined $key);
     $self->log ("arguments are %s", \@_) if DEBUG;
     $self->{type} = "__get";
-    $self->{default} = undef;
     $self->{key} = $key;
-    return $self if ($self->{key});
-    return ();
+    return $self;
 }
 
 *Memcached::Client::get = Memcached::Client::Request::Get->generate ("get");
 
 package Memcached::Client::Request::GetMulti;
 BEGIN {
-  $Memcached::Client::Request::GetMulti::VERSION = '1.99_02';
+  $Memcached::Client::Request::GetMulti::VERSION = '1.99_03';
 }
 # ABSTRACT: Driver for multiple Memcached::Client get requests
 
@@ -296,13 +284,13 @@ use base qw{Memcached::Client::Request};
 
 sub process {
     my ($self, @keys) = @_;
-    $self->{default} = {};
+    $self->{result} = {};
+    return () unless (@keys);
     $self->{partial} = 0;
     return grep {defined} map {
         my $request = bless {command => $self->{command}, sendkey => 1}, "Memcached::Client::Request::Get";
         $request->{cb} = sub {
             my ($key, $value) = @_;
-            local *__ANON__ = "Memcached::Client::Request::GetMulti::callback";
             $self->log ("Noting that we received %s for %s", $value, $key) if DEBUG;
             $self->{result}->{$key} = $value if (defined $value);
             $self->result unless (--$self->{partial});
@@ -320,7 +308,7 @@ sub process {
 
 package Memcached::Client::Request::Broadcast;
 BEGIN {
-  $Memcached::Client::Request::Broadcast::VERSION = '1.99_02';
+  $Memcached::Client::Request::Broadcast::VERSION = '1.99_03';
 }
 # ABSTRACT: Class to manage Memcached::Client server requests
 
@@ -329,13 +317,12 @@ use base qw{Memcached::Client::Request};
 
 
 sub process {
-    my ($self) = @_;
-    return $self;
+    return $_[0];
 }
 
 package Memcached::Client::Request::BroadcastMulti;
 BEGIN {
-  $Memcached::Client::Request::BroadcastMulti::VERSION = '1.99_02';
+  $Memcached::Client::Request::BroadcastMulti::VERSION = '1.99_03';
 }
 # ABSTRACT: Class to manage Memcached::Client broadcast requests
 
@@ -346,10 +333,10 @@ use base qw{Memcached::Client::Request};
 sub process {
     my ($self, @arguments) = @_;
     $self->{arguments} = \@arguments;
-    $self->{default} = {};
+    $self->{result} = {};
     $self->{partial} = 0;
     $self->{type} = "__$self->{command}";
-    return $self if ($self->{command});
+    return $self;
 }
 
 
@@ -358,7 +345,6 @@ sub server {
     my $request = bless {command => $self->{command}, key => $server, sendkey => 1, type => $self->{type}}, "Memcached::Client::Request::Broadcast";
     $request->{cb} = sub {
         my ($key, $value) = @_;
-        local *__ANON__ = "Memcached::Client::Request::BroadcastMulti::callback";
         $self->log ("Noting that we received %s for %s", $value, $key) if DEBUG;
         $self->{result}->{$key} = $value if (defined $value);
         $self->result unless (--$self->{partial});
@@ -375,7 +361,7 @@ sub server {
 
 package Memcached::Client::Request::Connect;
 BEGIN {
-  $Memcached::Client::Request::Connect::VERSION = '1.99_02';
+  $Memcached::Client::Request::Connect::VERSION = '1.99_03';
 }
 # ABSTRACT: Class to manage Memcached::Client server request
 
@@ -384,13 +370,12 @@ use base qw{Memcached::Client::Request};
 
 
 sub process {
-    my ($self) = @_;
-    return $self;
+    return $_[0];
 }
 
 package Memcached::Client::Request::ConnectMulti;
 BEGIN {
-  $Memcached::Client::Request::ConnectMulti::VERSION = '1.99_02';
+  $Memcached::Client::Request::ConnectMulti::VERSION = '1.99_03';
 }
 # ABSTRACT: Class to manage Memcached::Client connection requests
 
@@ -399,8 +384,7 @@ use base qw{Memcached::Client::Request};
 
 
 sub process {
-    my ($self) = @_;
-    return $self;
+    return $_[0];
 }
 
 
@@ -409,7 +393,6 @@ sub server {
     my $request = bless {command => "connect", key => $server, sendkey => 1, type => "__connect"}, "Memcached::Client::Request::Connect";
     $request->{cb} = sub {
         my ($key, $value) = @_;
-        local *__ANON__ = "Memcached::Client::Request::ConnectMulti::callback";
         $self->log ("Noting that we received %s for %s", $value, $key) if DEBUG;
         $self->{result}->{$key} = $value if (defined $value);
         $self->result (1) unless (--$self->{partial});
@@ -433,7 +416,7 @@ Memcached::Client::Request - Base class for Memcached::Client request drivers
 
 =head1 VERSION
 
-version 1.99_02
+version 1.99_03
 
 =head1 SYNOPSIS
 
@@ -490,11 +473,6 @@ the callback to submit the results to their consumer.
 
 If there has been no result gathered, it will return the default if
 there is one, otherwise it will return undef.
-
-=head2 run
-
-Using a reference to the protocol's routine, and reference to the
-connection that is invoking this request, do the transaction.
 
 =head2 C<process>
 

@@ -1,6 +1,6 @@
 package Memcached::Client;
 BEGIN {
-  $Memcached::Client::VERSION = '1.99_02';
+  $Memcached::Client::VERSION = '1.99_03';
 }
 # ABSTRACT: All-singing, all-dancing Perl client for Memcached
 
@@ -161,16 +161,15 @@ sub __submit {
                     $request->{key} = $self->{preprocessor}->($request->{key});
                 }
             }
-            if ((ref $request->{key} and # Pre-hashed
-                 $request->{key}->[0] =~ m/^\d+$/ and # Hash is a decimal #
-                 length $request->{key}->[1] > 0 and # Real key has a length
-                 length $request->{key}->[1] <= 250 and # Real key is shorter than 250 chars
-                 -1 == index $request->{key}, " " # Key contains no spaces
-                ) ||
-                (length $request->{key} > 0 and # Real key has a length
-                 length $request->{key} <= 250 and # Real key is shorter than 250 chars
-                 -1 == index $request->{key}, " " # Key contains no spaces
-                )) {
+            if (ref $request->{key} # Pre-hashed
+                ? ($request->{key}->[0] =~ m/^\d+$/ and # Hash is a decimal #
+                   length $request->{key}->[1] > 0 and # Real key has a length
+                   length $request->{key}->[1] <= 250 and # Real key is shorter than 250 chars
+                   -1 == index $request->{key}->[1], " ") # Key contains no spaces
+                : (length $request->{key} > 0 and # Real key has a length
+                   length $request->{key} <= 250 and # Real key is shorter than 250 chars
+                   -1 == index $request->{key}, " ") # Key contains no spaces
+               ) {
                 $self->log ("Finding server for key %s", $request->{key}) if DEBUG;
                 my $server = $self->{selector}->get_server ($request->{key}, $self->{hash_namespace} ? $self->{namespace} : "");
                 $request->{key} = ref $request->{key} ? $request->{key}->[1] : $request->{key};
@@ -202,7 +201,7 @@ Memcached::Client - All-singing, all-dancing Perl client for Memcached
 
 =head1 VERSION
 
-version 1.99_02
+version 1.99_03
 
 =head1 SYNOPSIS
 
@@ -659,17 +658,16 @@ likely get an error:
 
 	AnyEvent::CondVar: recursive blocking wait detected
 
-If you call a method in a synchronous fashion, but from a void
-context---that is, you are not doing anything with the return
-value---a warning will be raised.
-
 A method is considered to have been called in an asynchronous fashion
 if it is called with a callback as its last parameter.  If you make a
 call in asynchronous mode, your program is responsible for making sure
-that an event loop is run...otherwise your program will simply hang.
+that an event loop is run...otherwise your program will probably just
+exit.
 
-If you call a method in an asynchronous fashion, but you are also
-expecting a return value, a warning will be raised.
+When, in discussing the methods below, the documentation says a value
+will be returned, it means that in synchronous mode, the result will
+be returned from the function, or in asynchronous mode, the result
+will be passed to the callback when it is invoked.
 
 =head1 RATIONALE
 

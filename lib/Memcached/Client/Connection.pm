@@ -1,6 +1,6 @@
 package Memcached::Client::Connection;
 BEGIN {
-  $Memcached::Client::Connection::VERSION = '1.99_02';
+  $Memcached::Client::Connection::VERSION = '1.99_03';
 }
 # ABSTRACT: Class to manage Memcached::Client server connections
 
@@ -91,7 +91,8 @@ sub dequeue {
         return if ($self->{executing});
         if ($self->{executing} = shift @{$self->{queue}}) {
             $self->log ("Initiating request") if DEBUG;
-            $self->{executing}->run ($self, $self->{protocol});
+            my $command = $self->{executing}->{type};
+            $self->{protocol}->$command ($self, $self->{executing});
         }
     } else {
         $self->connect;
@@ -132,7 +133,7 @@ Memcached::Client::Connection - Class to manage Memcached::Client server connect
 
 =head1 VERSION
 
-version 1.99_02
+version 1.99_03
 
 =head1 SYNOPSIS
 
