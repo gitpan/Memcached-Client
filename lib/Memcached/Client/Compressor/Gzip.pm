@@ -1,6 +1,6 @@
 package Memcached::Client::Compressor::Gzip;
 BEGIN {
-  $Memcached::Client::Compressor::Gzip::VERSION = '1.99_03';
+  $Memcached::Client::Compressor::Gzip::VERSION = '2.00';
 }
 #ABSTRACT: Implements Memcached Compression using Gzip
 
@@ -73,7 +73,7 @@ Memcached::Client::Compressor::Gzip - Implements Memcached Compression using Gzi
 
 =head1 VERSION
 
-version 1.99_03
+version 2.00
 
 =head1 AUTHOR
 

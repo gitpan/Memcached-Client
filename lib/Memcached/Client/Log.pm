@@ -1,6 +1,6 @@
 package Memcached::Client::Log;
 BEGIN {
-  $Memcached::Client::Log::VERSION = '1.99_03';
+  $Memcached::Client::Log::VERSION = '2.00';
 }
 # ABSTRACT: Logging support for Memcached::Client
 
@@ -73,7 +73,7 @@ Memcached::Client::Log - Logging support for Memcached::Client
 
 =head1 VERSION
 
-version 1.99_03
+version 2.00
 
 =head1 SYNOPSIS
 
